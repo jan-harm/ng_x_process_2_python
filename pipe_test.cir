@@ -1,0 +1,57 @@
+pipe_test.cir
+; test for piping to python
+; d_process circuit connections:
+; in:
+;    zero or more inputs (vector) 
+;    clock (single input) the event driver
+;    reset (single line)
+; out:
+;   one or more outputs (vector)
+;
+; d_process pipe data
+;  header (all byte values):
+;    version (ox1 for this test)
+;    number of input bits (bits from ngspice to external program)
+;    number of output bits (bits back to ngspice)
+; note: the header must be returned to ngspice as handshake
+;  data packets to program:
+;    double float: running time of ng spice (unit probably seconds)
+;         note time will be negative after a reset.
+;    input bits packed in bytes (1 byte for 1 to 8 bits, 2 bytes for 9 to 15..)
+;  data returned to ngspice
+;    output bits packed in bytes (minimal 1 byte)
+
+*** analysis type ***
+.tran .01us 10us
+v1 1 0 DC 1.0
+v2 2 0 DC 0.0
+
+.model d_osc1 d_osc (cntl_array=[-1.0 0.0 1.0 2.0] 
++                    freq_array=[1.0e6 1.0e6 4.0e6 4.0e6]
++                    rise_delay=1.0e-6 fall_delay=2.0e-6)
+
+a1 1 clk1 d_osc1 
+a2 2 clk2 d_osc1 
+
+; test with 
+ap0_4 null clk1 null [q1 q2 q3 q4] proc0
+.model proc0 d_process (process_file="pytest|" process_params=["--pipe"])
+
+; ap1_4 [clk2] clk1 null [o1 o2 o3 o4] proc1
+; .model proc1 d_process (process_file="prog1in4out" process_params=["opt1", "qwerty"])
+
+; ap4_1 [o1 o2 o3 o4] clk1 null [zeros] proc2
+; .model proc2 d_process (process_file="prog4in1out" process_params=["abc", "99"])
+
+; ap4_1a [q1 q2 q3 q4] clk1 null [qzeros] proc3
+; .model proc3 d_process (process_file="prog4in1out")
+
+.control
+run
+edisplay
+; eprvcd clk1 clk2  o1 o2 o3 o4 q1 q2 q3 q4 zeros qzeros > pipe_test.vcd
+; shell gtkwave prog1-4.vcd --script nggtk.tcl &
+* quit
+.endc
+.end
+

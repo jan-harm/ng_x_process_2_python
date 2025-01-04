@@ -1,0 +1,5 @@
+#!/bin/bash
+
+echo "shell starting"
+/usr/bin/python3 pipe_test.py $1 $2 $3
+
