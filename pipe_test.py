@@ -9,10 +9,10 @@ from struct import pack, unpack
 max_version = 1
 size_of_double = 8
 
-# FIFO_IN = 'pytest_in'
-# FIFO_OUT = 'pytest_out'
-FIFO_IN = 'graycode_in'
-FIFO_OUT = 'graycode_out'
+FIFO_IN = 'pytest_in'
+FIFO_OUT = 'pytest_out'
+# FIFO_IN = '../x_processIn_c/graycode_in'
+# FIFO_OUT = '../x_processIn_c/graycode_out'
 
 report_port = sys.stdout
 size_in = np.dtype(np.double).itemsize
@@ -59,7 +59,7 @@ class PipeData():
         print(f'nr of output byte : {self.output_bytes}', file=stream)
         print(f'reset             : {self._reset}', file=stream)
         print(f'counter           : {self.counter}', file=stream)
-        print(f'time              : {self._time}', file=stream)
+        print(f'simulation time   : {self._time}', file=stream)
 
     def io_update(self, input_data):
         """update data object with new data from stream
@@ -70,6 +70,7 @@ class PipeData():
 
     def io_get_result(self):
         """get byte array for sending to pipe"""
+        return self.output_data
 
 
     @property
@@ -84,7 +85,8 @@ class PipeData():
         """returns bits from input data"""
         if high > self.input_bits:
             raise Exception('wrong bit mapping')
-        # tbf
+        # todo: implement bits grabbing, note bits grabbing from bytearray might be slow when byte
+        #       bounderies are crossed.
         pass
 
     def set_bits(self, low, high, bit_data):
@@ -147,9 +149,10 @@ while True:
     print(f'time {data.hex()}', file=report_port)
 
 
-# todo: solve blocking at end of program
+# todo: check working on stdin and stdout (for regular calls) whit/without shell
+# todo: solve blocking at end of program (is it blocking)
 # probably solution:
-# regsiter POLLHUP and POLLIN dan de functie komt terug wanneer een van deze atief is.
+# register POLLHUP and POLLIN dan de functie komt terug wanneer een van deze atief is.
 # vercolgens kijken of er data is en os einde file (gesloten pipe). (POLLHUP)
 # import select
 #
