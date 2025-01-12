@@ -1,6 +1,4 @@
-#!/usr/bin/python3 -u
-# test file to examine binary pipes from named pipes and stdin and stdout
-
+#!/usr/bin/python3
 
 import os
 import sys
@@ -13,7 +11,7 @@ size_of_double = 8
 
 FIFO_IN = 'pytest_in'
 FIFO_OUT = 'pytest_out'
-use_stdin = True
+use_stdin = False
 log_file = "tmp.log"
 
 
@@ -31,7 +29,6 @@ def report(msg):
 
 size_in = np.dtype(np.double).itemsize
 size_out = 1
-
 
 report(f'expected input size: {size_in}')
 
@@ -96,29 +93,6 @@ while True:
         break
     counter = (counter + 1) % (2 ** output_bits)
     report(f'time {data.hex()}')
-
-
-# todo: check working on stdin and stdout (for regular calls) whit/without shell
-#       best result when using the slash bang, however input stops after header (response is ok)
-# todo: solve blocking at end of program (is it blocking)
-# probably solution:
-# register POLLHUP and POLLIN dan de functie komt terug wanneer een van deze atief is.
-# vercolgens kijken of er data is en os einde file (gesloten pipe). (POLLHUP)
-# import select
-#
-# # ...
-#
-# poller = select.poll()
-# # Register the "hangup" event on p
-# poller.register(p, select.POLLHUP)
-#
-# # Call poller.poll with 0s as timeout
-# for descriptor, mask in poller.poll(0):
-#     # Can contain at most one element, but still:
-#     if descriptor == p.fileno() and mask & select.POLLHUP:
-#         report('The pipe is closed on the other end.')
-#         p.close()
-#
 
 report('\n\ndone...')
 
