@@ -11,7 +11,8 @@ size_of_double = 8
 
 FIFO_IN = 'pytest_in'
 FIFO_OUT = 'pytest_out'
-use_stdin = False
+use_stdin = True
+# use_stdin = False
 log_file = "tmp.log"
 
 
@@ -64,6 +65,7 @@ for n,v in [('version',version),('input_bits',input_bits),('output_bits', output
 report('respond header')
 dummy_header = bytearray(b'\x01\x00\x04')
 r = pipe_out.write(dummy_header)
+pipe_out.flush()
 
 report(f'written {r} bytes')
 # time.sleep(0.01)
@@ -87,7 +89,11 @@ while True:
         break
     report(' next.')
     # r = pipe_out.write(bytes(counter))
-    r = pipe_out.write(bytearray(b'\x03'))
+    c1 = bytearray(1)
+    c1[0] += counter
+    r = pipe_out.write(c1)
+    # r = pipe_out.write(bytearray(b'\x03'))
+    pipe_out.flush()
     if r == 0:
         report(f'could not write data (r is {r}), port closed is {pipe_out.closed}')
         break

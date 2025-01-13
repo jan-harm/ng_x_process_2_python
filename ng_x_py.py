@@ -5,6 +5,7 @@ import sys
 from struct import unpack
 
 import numpy as np
+from systemd.journal import stream
 
 max_version = 1
 size_of_double = 8
@@ -12,9 +13,9 @@ header_length = 3
 
 FIFO_IN = 'pytest_in'
 FIFO_OUT = 'pytest_out'
-use_stdin = False
-# log_file = "tmp.log"
-log_file = None
+use_stdin = True
+log_file = "tmp.log"
+# log_file = None
 
 
 
@@ -36,7 +37,6 @@ class PipeData:
         byte 1: number of input bits 0,1,2...
         byte 2: number of output bits 1,2,3...
         """
-        print(header)
         if len(header) > 3:
             raise Exception(f'header to long.  {header}')
         self.header = np.array(bytearray(header), dtype=np.uint8)
@@ -51,22 +51,28 @@ class PipeData:
         self.output_data = bytearray(self.output_bytes)
         self.counter = 0  # counting the entries
         self._reset = False
+        self._reset_count = 0
         self._time = float(0)
+        self._first_time = np.nan
+        self._first_time_valid = False
         self.last_input = self.input_data
         self.last_output = self.output_data
 
-    def print_status(self, stream):
-        print(f'header            : {self.header}')
-        print(f'version           : {self.version}', file=stream)
-        print(f'nr of input bits  : {self.input_bits}', file=stream)
-        print(f'nr of input bytes : {self.input_bytes}', file=stream)
-        print(f'nr of output bits : {self.output_bits}', file=stream)
-        print(f'nr of output bytes: {self.output_bytes}', file=stream)
-        print(f'reset             : {self._reset}', file=stream)
-        print(f'counter           : {self.counter}', file=stream)
-        print(f'last simulation time  : {self.time:3.5e}', file=stream)
-        print(f'last input data      : {self.last_input}', file=stream)
-        print(f'last output data     : {self.last_output}', file=stream)
+    def print_status(self, report_stream):
+        print(f'header                : {self.header}', file=report_stream)
+        print(f'version               : {self.version}', file=report_stream)
+        print(f'nr of input bits      : {self.input_bits}', file=report_stream)
+        print(f'nr of input bytes     : {self.input_bytes}', file=report_stream)
+        print(f'nr of output bits     : {self.output_bits}', file=report_stream)
+        print(f'nr of output bytes    : {self.output_bytes}', file=report_stream)
+        print(f'reset                 : {self._reset}', file=report_stream)
+        print(f'counter               : {self.counter}', file=report_stream)
+        print(f'first simulation time : {self._first_time:3.5e}', file=report_stream)
+        print(f'last simulation time  : {self.time:3.5e}', file=report_stream)
+        print(f'number of resets      : {self._reset_count}', file=report_stream)
+        print(f'last input data       : {self.last_input}', file=report_stream)
+        print(f'last output data      : {self.last_output}', file=report_stream)
+        report_stream.flush()
 
 
     def io_update(self, input_data):
@@ -75,7 +81,13 @@ class PipeData:
         self.last_input = np.array(bytearray(input_data), dtype=np.uint8)
         self._time = self.last_input[0:8].view(np.float64)[0]
         self._reset = self._time < 0.0
+        if self._reset:
+            self._reset_count += 1
         self.counter = 0 if self._reset else self.counter + 1
+        if self._first_time_valid == False and not self._reset:
+            self._first_time = self._time
+            self._first_time_valid = True
+
 
     def io_get_result(self):
         """get byte array for sending to pipe"""
@@ -105,7 +117,7 @@ class PipeData:
         pass
 
 
-if log_file:
+if use_stdin:
     if log_file is None:
         report_port = sys.stderr
     else:
@@ -150,15 +162,14 @@ else:
 report('reading header')
 sim_dat = PipeData(pipe_in.read(header_length))
 
-sim_dat.print_status(log_file)
+sim_dat.print_status(report_port)
 
-# respond with header as acknowledge
 report('respond header')
 dummy_header = bytearray(b'\x01\x00\x04')
 r = pipe_out.write(sim_dat.header)
+pipe_out.flush()
 
 report(f'written {r} bytes')
-# time.sleep(0.01)
 
 
 report(f' input size is {size_in} bytes')
@@ -180,6 +191,7 @@ while True:
     # report(' next.')
     # r = pipe_out.write(bytes(counter))
     r = pipe_out.write(bytearray(b'\x03'))
+    pipe_out.flush()
     if r == 0:
         report(f'could not write data (r is {r}), port closed is {pipe_out.closed}')
         break
@@ -187,9 +199,10 @@ while True:
     if counter == 0:
         report(f'loop time {sim_dat.time:3.3e}')
 
-sim_dat.print_status(log_file)
-
+sim_dat.print_status(report_port)
+report_port.flush()
 report('\n\ndone...')
+report_port.close()
 
 
 

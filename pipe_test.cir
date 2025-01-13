@@ -49,9 +49,9 @@ ap0_4 null clk1 null [q1 q2 q3 q4] proc0
 .control
 run
 edisplay
-; eprvcd clk1 clk2  o1 o2 o3 o4 q1 q2 q3 q4 zeros qzeros > pipe_test.vcd
-; shell gtkwave prog1-4.vcd --script nggtk.tcl &
-* quit
+eprvcd clk1 clk2  o1 o2 o3 o4 q1 q2 q3 q4 zeros qzeros > pipe_test.vcd
+shell gtkwave pipe_test.vcd --script nggtk.tcl &
+quit
 .endc
 .end
 
