@@ -2,13 +2,15 @@
 
 import os
 import sys
-from struct import unpack
 
 import numpy as np
+import bitarray as ba
+from bitarray.util import ba2int, int2ba
+# =ba.bitarray(buffer=a, endian='big')
 from systemd.journal import stream
 
 max_version = 1
-size_of_double = 8
+size_of_double = 8  # time is double
 header_length = 3
 
 FIFO_IN = 'pytest_in'
@@ -31,12 +33,17 @@ class PipeData:
     perform the calculations on the object
     return the output data
     """
-    def __init__(self, header):
-        """ header is a 3 byte array received from ng spice:
+    def __init__(self, stream_in, stream_out):
+        """ stream is a fifo input from which the header is read.
+        header is a 3 byte array received from ng spice:
         byte 0: version of format (0x1)
         byte 1: number of input bits 0,1,2...
         byte 2: number of output bits 1,2,3...
         """
+        self.stream_in = stream_in
+        self.stream_out = stream_out
+
+        header = stream_in.read(header_length)
         if len(header) > 3:
             raise Exception(f'header to long.  {header}')
         self.header = np.array(bytearray(header), dtype=np.uint8)
@@ -45,9 +52,10 @@ class PipeData:
             raise Exception('version not supported.')
         self.input_bits = int(self.header[1])
         self.input_bytes =  0 if self.input_bits == 0 else (self.input_bits-1)//8 + 1
+        self.size_in = self.input_bytes + size_of_double
         self.output_bits = int(self.header[2])
         self.output_bytes =  0 if self.output_bits == 0 else (self.output_bits-1)//8 + 1
-        self.input_data = np.zeros(self.input_bytes, dtype=np.uint8)
+        self.input_data = np.zeros(self.input_bits, dtype=np.uint8)
         self.output_data = bytearray(self.output_bytes)
         self.counter = 0  # counting the entries
         self._reset = False
@@ -59,6 +67,7 @@ class PipeData:
         self.last_output = self.output_data
 
     def print_status(self, report_stream):
+        # todo: simplify
         print(f'header                : {self.header}', file=report_stream)
         print(f'version               : {self.version}', file=report_stream)
         print(f'nr of input bits      : {self.input_bits}', file=report_stream)
@@ -74,12 +83,12 @@ class PipeData:
         print(f'last output data      : {self.last_output}', file=report_stream)
         report_stream.flush()
 
-
-    def io_update(self, input_data):
+    def io_update(self):
         """update data object with new data from stream
         input data is an bytearray with length of 8 (time) plus number of input bytes"""
-        self.last_input = np.array(bytearray(input_data), dtype=np.uint8)
-        self._time = self.last_input[0:8].view(np.float64)[0]
+        self.last_input = np.array(bytearray(self.stream_in.read(self.size_in)) , dtype=np.uint8)
+
+        self._time = self.last_input[0:size_of_double].view(np.float64)[0]
         self._reset = self._time < 0.0
         if self._reset:
             self._reset_count += 1
@@ -116,6 +125,11 @@ class PipeData:
         """set bits in output stream, data is int (so max 64 bits) """
         pass
 
+#todo: define simple counter function
+#      o in count
+#      1 in enable
+#      2 in up/down
+#      n out -> nbit counter
 
 if use_stdin:
     if log_file is None:
@@ -136,7 +150,7 @@ def report(msg):
 
 
 
-size_in = np.dtype(np.double).itemsize
+size_in = np.dtype(np.double).itemsize + 1
 size_out = 1
 
 report(f'expected input size: {size_in}')
@@ -160,7 +174,7 @@ else:
 
 # read pipe binary header
 report('reading header')
-sim_dat = PipeData(pipe_in.read(header_length))
+sim_dat = PipeData(pipe_in)
 
 sim_dat.print_status(report_port)
 
@@ -196,8 +210,10 @@ while True:
         report(f'could not write data (r is {r}), port closed is {pipe_out.closed}')
         break
     counter = (counter + 1) % (2 ** sim_dat.output_bits)
-    if counter == 0:
-        report(f'loop time {sim_dat.time:3.3e}')
+    # if counter == 0:
+    report(f'loop time {sim_dat.time:3.3e}')
+    report(f'counter is {sim_dat.counter}')
+    report('')
 
 sim_dat.print_status(report_port)
 report_port.flush()
