@@ -17,7 +17,7 @@ header_length = 3
 
 FIFO_IN = 'pytest_in'
 FIFO_OUT = 'pytest_out'
-use_stdin = False
+
 # log_file = "tmp.log"
 log_file = None
 
@@ -148,11 +148,6 @@ class PipeData:
         """set bits in output stream, data is int (so max 64 bits) """
         pass
 
-#todo: define simple counter function
-#      o in count
-#      1 in enable
-#      2 in up/down
-#      n out -> nbit counter
 class Counter:
     """Simple function to test interface
     nr of input bits:
@@ -187,6 +182,16 @@ class Counter:
 
         return  int2ba(self.count, self.nr_output_bits)
 
+def report(msg):
+    msg = msg + '\n'
+    report_port.write(msg)
+    report_port.flush()
+
+#   code start ################################
+if 'named_pipe' in sys.argv:
+    use_stdin = False
+else:
+    use_stdin = True
 
 if use_stdin:
     if log_file is None:
@@ -199,16 +204,16 @@ else:
     report_port = sys.stdout
 
 
-def report(msg):
-    msg = msg + '\n'
-    report_port.write(msg)
-    report_port.flush()
 
+
+for a in sys.argv:
+    report(f'argv: {a}')
 
 
 
 size_in = np.dtype(np.double).itemsize + 1
 size_out = 1
+
 
 report(f'expected input size: {size_in}')
 
