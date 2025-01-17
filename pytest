@@ -1,3 +1,3 @@
 #!/bin/bash
-/usr/bin/python3 ng_x_py.py $1 $2 $3
+/home/jan/local/home/jan/development/cad/ngspice_tests/x_process_test/venv/bin/python ng_x_py.py $1 $2 $3
 
