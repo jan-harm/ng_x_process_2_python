@@ -19,8 +19,8 @@ header_length = 3
 FIFO_IN = 'pytest_in'
 FIFO_OUT = 'pytest_out'
 
-# log_file = "tmp.log"
-log_file = None
+log_file = "tmp.log"
+# log_file = None
 
 
 
@@ -180,7 +180,7 @@ def report(msg):
     report_port.flush()
 
 # table with allowed functions.
-function_table = { 'Counter' : Counter}
+function_table = { 'counter' : Counter}
 #   code start ################################
 
 parser = argparse.ArgumentParser(prog=sys.argv[0], exit_on_error=False)
@@ -234,6 +234,7 @@ else:
     # pipe_out = open(FIFO_OUT, 'wb')
     report(f'{pipe_out}')
 
+# d_function = function_table["Counter"]
 if args.function in function_table:
     d_function = function_table[args.function]
 else:

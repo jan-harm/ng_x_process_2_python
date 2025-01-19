@@ -20,6 +20,8 @@ pipe_test.cir
 ;    input bits packed in bytes (1 byte for 1 to 8 bits, 2 bytes for 9 to 15..)
 ;  data returned to ngspice
 ;    output bits packed in bytes (minimal 1 byte)
+; 
+; arguments from d_process seem to be passed in lower case while python is case sensitive!
 
 *** analysis type ***
 .tran .01us 10us
@@ -35,7 +37,7 @@ a2 2 clk2 d_osc1
 
 ; test with 
 ap0_4 [clk1 clk2] clk1 null [q1 q2 q3 q4] proc0
-.model proc0 d_process (process_file="pytest" process_params=["--adder"])
+.model proc0 d_process (process_file="pytest" process_params=["counter"])
 
 ; ap1_4 [clk2] clk1 null [o1 o2 o3 o4] proc1
 ; .model proc1 d_process (process_file="prog1in4out" process_params=["opt1", "qwerty"])
