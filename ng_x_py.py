@@ -6,6 +6,7 @@ import sys
 import numpy as np
 import bitarray as ba
 from bitarray.util import ba2int, int2ba, zeros
+import argparse
 
 
 # =ba.bitarray(buffer=a, endian='big')
@@ -136,17 +137,6 @@ class PipeData:
     def reset(self):
         return self._reset
 
-    def get_bits(self, low, high):
-        """returns bits from input data"""
-        if high > self.input_bits:
-            raise Exception('wrong bit mapping')
-        # todo: implement bits grabbing, note bits grabbing from bytearray might be slow when byte
-        #       boundaries are crossed.
-        pass
-
-    def set_bits(self, low, high, bit_data):
-        """set bits in output stream, data is int (so max 64 bits) """
-        pass
 
 class Counter:
     """Simple function to test interface
@@ -156,6 +146,7 @@ class Counter:
     2  2nd input is up/down (high is up)
     nr of output bits:
     n  count to 2**n-1
+    Counter is initialized on 0 and an update updates the counter and returns the new state
     """
     def __init__(self, nr_input_bits, nr_output_bits):
         self.enable = nr_input_bits > 0
@@ -166,8 +157,9 @@ class Counter:
         report(f' updown {self.updown}  enable {self.enable}')
 
     def update(self, input_bits):
+        """Input bit array or None"""
         report(f'count enable {input_bits[-1]}  up_down {input_bits[-2]}')
-        if self.enable and input_bits[-1] == 1:
+        if self.enable and input_bits[-1] == 1 or not self.enable:
             report(f' enabled  {input_bits[-1]}  ')
             increment = 1
             if self.updown and  input_bits[-2] == 0:
@@ -187,8 +179,17 @@ def report(msg):
     report_port.write(msg)
     report_port.flush()
 
+# table with allowed functions.
+function_table = { 'Counter' : Counter}
 #   code start ################################
-if 'named_pipe' in sys.argv:
+
+parser = argparse.ArgumentParser(prog=sys.argv[0], exit_on_error=False)
+parser.add_argument('--named_pipe', action='store_true')
+parser.add_argument('function', action='store', default='Counter')
+args = parser.parse_args(sys.argv[1:])
+
+
+if '--named_pipe' in sys.argv:
     use_stdin = False
 else:
     use_stdin = True
@@ -209,7 +210,7 @@ else:
 for a in sys.argv:
     report(f'argv: {a}')
 
-
+report(str(args))
 
 size_in = np.dtype(np.double).itemsize + 1
 size_out = 1
@@ -233,12 +234,22 @@ else:
     # pipe_out = open(FIFO_OUT, 'wb')
     report(f'{pipe_out}')
 
-# read pipe binary header
+if args.function in function_table:
+    d_function = function_table[args.function]
+else:
+    report(f'function {args.function} not found')
+    report('functions available:')
+    for f in function_table:
+        report(f'   {f}')
+    raise Exception(' no function found')
+
+    # read pipe binary header
+# prepare loop
 report('reading header')
 sim_dat = PipeData(pipe_in, pipe_out)
 
 sim_dat.print_status(report_port)
-cnt = Counter(sim_dat.input_bits, sim_dat.output_bits)
+loop_function = d_function(sim_dat.input_bits, sim_dat.output_bits)
 report('respond header')
 dummy_header = bytearray(b'\x01\x00\x04')
 r = pipe_out.write(sim_dat.header)
@@ -263,7 +274,7 @@ while True:
         report(' no input data')
         break
     report(f' >>>>>>>>>>>>>  input data : {sim_dat.input_data}')
-    result = cnt.update(sim_dat.input_data)
+    result = loop_function.update(sim_dat.input_data)
     report(f' <<<<<<<<<<<<<  output data : {result}')
     res2 = sim_dat.io_send_result(result)
     # report(' next.')
@@ -284,6 +295,8 @@ report_port.flush()
 report('\n\ndone...')
 report_port.close()
 
+
+# todo: make a clear startup and loop. Note that a second ngspice run will resend the header
 
 
 
