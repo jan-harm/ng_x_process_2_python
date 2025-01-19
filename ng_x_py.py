@@ -5,13 +5,11 @@ import sys
 
 import numpy as np
 import bitarray as ba
-from bitarray.util import ba2int, int2ba, zeros
+from bitarray.util import int2ba, zeros
 import argparse
 
 
-# =ba.bitarray(buffer=a, endian='big')
-# from systemd.journal import stream
-
+# constants
 max_version = 1
 size_of_double = 8  # time is double
 header_length = 3
@@ -20,9 +18,6 @@ FIFO_IN = 'pytest_in'
 FIFO_OUT = 'pytest_out'
 
 log_file = "tmp.log"
-# log_file = None
-
-
 
 class PipeData:
     """contains the data from and to the pipes to ngspice
@@ -69,8 +64,11 @@ class PipeData:
         self._first_time_valid = False
         self.last_input_data = self.input_data
         self.last_output_data = self.output_data
+        # response to pipe
+        self.stream_out.write(self.header)
+        self.stream_out.flush()
 
-    def print_status(self, report_stream):
+    def log_status(self, report_stream):
         # todo: simplify
         print(f'header                : {self.header}', file=report_stream)
         print(f'version               : {self.version}', file=report_stream)
@@ -151,7 +149,7 @@ class Counter:
     def __init__(self, nr_input_bits, nr_output_bits):
         self.enable = nr_input_bits > 0
         self.updown = nr_input_bits > 1
-        self.count_max = nr_output_bits ** 2 -1
+        self.count_max = nr_output_bits ** 2 - 1
         self.count = 0
         self.nr_output_bits = nr_output_bits
         report(f' updown {self.updown}  enable {self.enable}')
@@ -188,53 +186,27 @@ parser.add_argument('--named_pipe', action='store_true')
 parser.add_argument('function', action='store', default='Counter')
 args = parser.parse_args(sys.argv[1:])
 
-
-if '--named_pipe' in sys.argv:
-    use_stdin = False
-else:
-    use_stdin = True
+use_stdin = not args.named_pipe
 
 if use_stdin:
-    if log_file is None:
-        report_port = sys.stderr
-    else:
-        report_port = open(log_file, 'w')
+    report_port = open(log_file, 'w')
     report_port.write('start logging\n')
     report_port.flush()
 else:
     report_port = sys.stdout
 
-
-
-
-for a in sys.argv:
-    report(f'argv: {a}')
-
-report(str(args))
-
-size_in = np.dtype(np.double).itemsize + 1
-size_out = 1
-
-
-report(f'expected input size: {size_in}')
-
 if use_stdin:
     report('using stdin and out in detached mode')
 
-    # pipe_in = sys.stdin.buffer
-    # remap to binary in and out
     pipe_in = os.fdopen(sys.stdin.fileno(), "rb", closefd=False)
     pipe_out = os.fdopen(sys.stdout.fileno(), "wb", closefd=False)
 else:
     report(f"Opening FIFOs:  {FIFO_IN}  and {FIFO_OUT}")
     pipe_in = open(FIFO_IN, 'rb', buffering=0)
-    # pipe_in = open(FIFO_IN, 'rb')
     report(f'{pipe_in}')
     pipe_out = open(FIFO_OUT, 'wb', buffering=0)
-    # pipe_out = open(FIFO_OUT, 'wb')
     report(f'{pipe_out}')
 
-# d_function = function_table["Counter"]
 if args.function in function_table:
     d_function = function_table[args.function]
 else:
@@ -244,24 +216,13 @@ else:
         report(f'   {f}')
     raise Exception(' no function found')
 
-    # read pipe binary header
 # prepare loop
 report('reading header')
 sim_dat = PipeData(pipe_in, pipe_out)
 
-sim_dat.print_status(report_port)
+sim_dat.log_status(report_port)
 loop_function = d_function(sim_dat.input_bits, sim_dat.output_bits)
-report('respond header')
-dummy_header = bytearray(b'\x01\x00\x04')
-r = pipe_out.write(sim_dat.header)
-pipe_out.flush()
 
-report(f'written {r} bytes')
-
-
-report(f' input size is {size_in} bytes')
-report(f' output size is {size_out} bytes')
-counter = 0
 report('starting loop')
 while True:
     if pipe_in.closed:
@@ -278,22 +239,19 @@ while True:
     result = loop_function.update(sim_dat.input_data)
     report(f' <<<<<<<<<<<<<  output data : {result}')
     res2 = sim_dat.io_send_result(result)
-    # report(' next.')
-    # r = pipe_out.write(bytes(counter))
     r = pipe_out.write(bytearray(b'\x03'))
     pipe_out.flush()
     if r == 0:
         report(f'could not write data (r is {r}), port closed is {pipe_out.closed}')
         break
-    counter = (counter + 1) % (2 ** sim_dat.output_bits)
-    # if counter == 0:
     report(f'loop time {sim_dat.time:3.3e}')
     report(f'counter is {sim_dat.counter}')
     report('')
 
-sim_dat.print_status(report_port)
-report_port.flush()
+sim_dat.log_status(report_port)
+
 report('\n\ndone...')
+report_port.flush()
 report_port.close()
 
 
