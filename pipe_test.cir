@@ -21,26 +21,28 @@ pipe_test.cir
 ;  data returned to ngspice
 ;    output bits packed in bytes (minimal 1 byte)
 ; 
-; arguments from d_process seem to be passed in lower case while python is case sensitive!
+; arguments from d_process seem to be passed in lower case while python argv is case sensitive!
 
 *** analysis type ***
-.tran .01us 10us
+.tran 10ns 10us
 v1 1 0 DC 1.0
 v2 2 0 DC 0.0
+v3 3 0 DC -1.0
 
 .model d_osc1 d_osc (cntl_array=[-1.0 0.0 1.0 2.0] 
-+                    freq_array=[1.0e6 1.0e6 4.0e6 4.0e6]
-+                    rise_delay=1.0e-6 fall_delay=2.0e-6)
++                    freq_array=[0.1e6 0.5e6 8.0e6 12.0e6]
++                    rise_delay=40.0e-9 fall_delay=40.0e-9)
 
 a1 1 clk1 d_osc1 
-a2 2 clk2 d_osc1 
+a2 2 enable d_osc1 
+a3 3 up_down d_osc1
 
-; test with 
-ap0_4 [clk1 clk2] clk1 null [q1 q2 q3 q4] proc0
-.model proc0 d_process (process_file="pytest" process_params=["counter"])
+; test with python, different log files for tracebility
+ap0_4 [enable up_down] clk1 null [q1 q2 q3 q4] proc0
+.model proc0 d_process (process_file="pytest" process_params=["--log_file", "first.log", "counter"])
 
-; ap1_4 [clk2] clk1 null [o1 o2 o3 o4] proc1
-; .model proc1 d_process (process_file="prog1in4out" process_params=["opt1", "qwerty"])
+ap1_4 null clk1 null [o1 o2 o3 o4] proc1
+.model proc1 d_process (process_file="pytest" process_params=["--log_file", "second.log", "counter"])
 
 ; ap4_1 [o1 o2 o3 o4] clk1 null [zeros] proc2
 ; .model proc2 d_process (process_file="prog4in1out" process_params=["abc", "99"])
@@ -51,8 +53,8 @@ ap0_4 [clk1 clk2] clk1 null [q1 q2 q3 q4] proc0
 .control
 run
 edisplay
-; eprvcd clk1 clk2  o1 o2 o3 o4 q1 q2 q3 q4 zeros qzeros > pipe_test.vcd
-; shell gtkwave pipe_test.vcd --script nggtk.tcl &
+eprvcd clk1 enable up_down q1 q2 q3 q4 o1 o2 o3 o4 > pipe_test.vcd
+shell gtkwave pipe_test.vcd --script nggtk.tcl &
 quit
 .endc
 .end

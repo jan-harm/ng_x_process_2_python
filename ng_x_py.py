@@ -8,7 +8,6 @@ import bitarray as ba
 from bitarray.util import int2ba, zeros
 import argparse
 
-
 # constants
 max_version = 1
 size_of_double = 8  # time is double
@@ -17,7 +16,6 @@ header_length = 3
 FIFO_IN = 'pytest_in'
 FIFO_OUT = 'pytest_out'
 
-log_file = "tmp.log"
 
 class PipeData:
     """contains the data from and to the pipes to ngspice
@@ -31,6 +29,7 @@ class PipeData:
     perform the calculations on the object
     return the output data
     """
+
     def __init__(self, stream_in, stream_out):
         """ stream is a fifo input from which the header is read.
         header is a 3 byte array received from ng spice:
@@ -48,10 +47,10 @@ class PipeData:
         if self.version > max_version:
             raise Exception('version not supported.')
         self.input_bits = int(self.header[1])
-        self.input_bytes =  0 if self.input_bits == 0 else (self.input_bits-1)//8 + 1
+        self.input_bytes = 0 if self.input_bits == 0 else (self.input_bits - 1) // 8 + 1
         self.size_in = self.input_bytes + size_of_double
         self.output_bits = int(self.header[2])
-        self.output_bytes =  0 if self.output_bits == 0 else (self.output_bits-1)//8 + 1
+        self.output_bytes = 0 if self.output_bits == 0 else (self.output_bits - 1) // 8 + 1
         self._raw_in = np.array(bytearray(b'\x00'), dtype=np.uint8)
         self.input_data = zeros(self.input_bits)
         self.output_data = zeros(self.output_bits)
@@ -85,13 +84,13 @@ class PipeData:
         print(f'last output data      : {self.last_output_data}', file=report_stream)
         report_stream.flush()
 
-    def io_update(self):
+    def io_update_from_pipe(self):
         """update data object with new data from stream
         input data is a bytearray with length of 8 (time) plus number of input bytes"""
         self._raw_in = np.array(bytearray(self.stream_in.read(self.size_in)), dtype=np.uint8)
         report(f'raw in: {bytearray(self._raw_in.tobytes()).hex()}')
         report(f'raw in hex: {self._raw_in}')
-        if len(self._raw_in) == 0: # we are done
+        if len(self._raw_in) == 0:  # we are done
             return False
         self._time = self._raw_in[0:size_of_double].view(np.float64)[0]
         self._reset = self._time < 0.0
@@ -107,13 +106,16 @@ class PipeData:
             report(f'total input bits {tmp_input_data}')
             self.input_data = tmp_input_data[-self.input_bits:]
         else:
-            self.input_data = zeros(0) # empty bitarray
+            self.input_data = zeros(0)  # empty bitarray
 
         return True
 
-
-    def io_send_result(self, result_bits):
-        """get byte array for sending to pipe"""
+    def io_send_result_to_pipe(self, result_bits):
+        """Input is bitarray with result from digital function
+        - book keeping is updated
+        - data converted to bytes()
+        - data send to pipe
+        return number of bytes send"""
         self.last_input_data = self.input_data
         self.last_output_data = self.output_data
         self.output_data = result_bits
@@ -124,8 +126,9 @@ class PipeData:
         # self.stream_out.flussh()
         report(f'bits {o_data}')
         report(f'hex {o_data.tobytes().hex()}')
-        return self.output_data
-
+        nr_of_bytes =  self.stream_out.write(o_data.tobytes())
+        self.stream_out.flush()
+        return nr_of_bytes
 
     @property
     def time(self):
@@ -146,6 +149,7 @@ class Counter:
     n  count to 2**n-1
     Counter is initialized on 0 and an update updates the counter and returns the new state
     """
+
     def __init__(self, nr_input_bits, nr_output_bits):
         self.enable = nr_input_bits > 0
         self.updown = nr_input_bits > 1
@@ -156,40 +160,48 @@ class Counter:
 
     def update(self, input_bits):
         """Input bit array or None"""
-        report(f'count enable {input_bits[-1]}  up_down {input_bits[-2]}')
-        if self.enable and input_bits[-1] == 1 or not self.enable:
+        # report(f'count enable {input_bits[-1]}  up_down {input_bits[-2]}')
+        increment = 1
+        if self.enable:
+            if input_bits[-1] != 1:
+                increment = 0
             report(f' enabled  {input_bits[-1]}  ')
-            increment = 1
-            if self.updown and  input_bits[-2] == 0:
-                report('decrement')
-                increment = -1
-            self.count = self.count + increment
-            report(f'counter {self.count}')
-            if self.count > self.count_max:
-                self.count = 0
-            if self.count < 0:
-                self.count = self.count_max
+            if self.updown:
+                report('up/down enabled')
+                if input_bits[-2] == 0:
+                    report('decrement')
+                    increment = -increment
+        self.count = self.count + increment
+        if self.count > self.count_max:
+            self.count = 0
+        if self.count < 0:
+            self.count = self.count_max
+        report(f'counter {self.count}')
 
-        return  int2ba(self.count, self.nr_output_bits)
+        return int2ba(self.count, self.nr_output_bits)
+
 
 def report(msg):
     msg = msg + '\n'
     report_port.write(msg)
     report_port.flush()
 
+
 # table with allowed functions.
-function_table = { 'counter' : Counter}
+function_table = {'counter': Counter}
 #   code start ################################
 
 parser = argparse.ArgumentParser(prog=sys.argv[0], exit_on_error=False)
 parser.add_argument('--named_pipe', action='store_true')
 parser.add_argument('function', action='store', default='Counter')
+parser.add_argument('--log_file', action='store', default='ng_x_py.log')
 args = parser.parse_args(sys.argv[1:])
+
 
 use_stdin = not args.named_pipe
 
 if use_stdin:
-    report_port = open(log_file, 'w')
+    report_port = open(args.log_file, 'w')
     report_port.write('start logging\n')
     report_port.flush()
 else:
@@ -197,7 +209,6 @@ else:
 
 if use_stdin:
     report('using stdin and out in detached mode')
-
     pipe_in = os.fdopen(sys.stdin.fileno(), "rb", closefd=False)
     pipe_out = os.fdopen(sys.stdout.fileno(), "wb", closefd=False)
 else:
@@ -232,16 +243,15 @@ while True:
         report('pipe out closed')
         break
     # data = pipe_in.read(size_in)  # read a float
-    if not sim_dat.io_update():
+    if not sim_dat.io_update_from_pipe():
         report(' no input data')
         break
     report(f' >>>>>>>>>>>>>  input data : {sim_dat.input_data}')
     result = loop_function.update(sim_dat.input_data)
     report(f' <<<<<<<<<<<<<  output data : {result}')
-    res2 = sim_dat.io_send_result(result)
-    r = pipe_out.write(bytearray(b'\x03'))
-    pipe_out.flush()
-    if r == 0:
+    res2 = sim_dat.io_send_result_to_pipe(result)
+    report(f'nr of bytes send to pipe: {res2}')
+    if res2 == 0:
         report(f'could not write data (r is {r}), port closed is {pipe_out.closed}')
         break
     report(f'loop time {sim_dat.time:3.3e}')
@@ -254,8 +264,4 @@ report('\n\ndone...')
 report_port.flush()
 report_port.close()
 
-
-# todo: make a clear startup and loop. Note that a second ngspice run will resend the header
-
-
-
+# todo: make a clear startup and loop. Note that a second ngspice run will resend the header without reopening the pipe.
