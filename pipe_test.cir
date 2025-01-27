@@ -24,7 +24,7 @@ pipe_test.cir
 ; arguments from d_process seem to be passed in lower case while python argv is case sensitive!
 
 *** analysis type ***
-.tran 10ns 10us
+.tran 10ns 30us
 v1 1 0 DC 1.0
 v2 2 0 DC 0.0
 v3 3 0 DC -1.0
@@ -39,10 +39,10 @@ a3 3 up_down d_osc1
 
 ; test with python, different log files for tracebility
 ap0_4 [enable up_down] clk1 null [q1 q2 q3 q4] proc0
-.model proc0 d_process (process_file="pytest" process_params=["--log_file", "first.log", "counter"])
+.model proc0 d_process (process_file="pytest" process_params=["-vvv", "--log_file", "first.log", "counter"])
 
-ap1_4 null clk1 null [o1 o2 o3 o4] proc1
-.model proc1 d_process (process_file="pytest" process_params=["--log_file", "second.log", "counter"])
+ap1_4 [up_down enable] clk1 null [o1 o2 o3 o4] proc1
+.model proc1 d_process (process_file="pytest", process_params=["shifter","-v", "--log_file", "shifter.log]))
 
 ; ap4_1 [o1 o2 o3 o4] clk1 null [zeros] proc2
 ; .model proc2 d_process (process_file="prog4in1out" process_params=["abc", "99"])
