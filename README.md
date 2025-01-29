@@ -38,6 +38,10 @@ Process finished with exit code 0
 The function should be counter or shifter, see the classes in ng_x_py.py
 A simple bitarray is used for interface to shifter and counter.
 
+to use a named pipe create to pipes (pytest_in and pytest_out) and add an argument --pipe
+see named_pipe_test for details. named pipes make it easier to test, just set a breakpoint and start the program with --pipe option and then start ngspice. Note that the arguments within the named_pipe_test.cir are ignored when starting the script by hand.
+
+
 ## requirements
 - tests done on  Ubuntu 24.04.1 LTS
 - ngspice must be installed for command line use (Kicad uses a dll)
