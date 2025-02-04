@@ -14,11 +14,11 @@ class Delay:
     Note minimal delay is one.
     """
 
-    def __init__(self, nr_input_bits, nr_output_bits, par1=2):
+    def __init__(self, nr_input_bits, nr_output_bits, arg1=None, arg2=None):
         if nr_input_bits == 0:
             logger.warning(' delay should have at least one bit input for data')
             raise Exception('not enough inputs for delay')
-        self.clocks_delay = par1 if par1 > 1 else 1
+        self.clocks_delay = int(arg1) if int(arg1) > 1 else 1
         self.enable = nr_input_bits > 1
         self.delay_register = zeros(self.clocks_delay)
         self.nr_output_bits = nr_output_bits

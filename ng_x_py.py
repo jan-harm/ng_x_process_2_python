@@ -146,7 +146,7 @@ class Counter:
     Counter is initialized on 0 and an update updates the counter and returns the new state
     """
 
-    def __init__(self, nr_input_bits, nr_output_bits):
+    def __init__(self, nr_input_bits, nr_output_bits, arg1=None, arg2=None):
         self.enable = nr_input_bits > 0
         self.updown = nr_input_bits > 1
         self.count_max = nr_output_bits ** 2 - 1
@@ -182,7 +182,7 @@ class Shifter:
     nr of outputs bits:
     n gives a register of nbits"""
 
-    def __init__(self, nr_input_bits, nr_output_bits):
+    def __init__(self, nr_input_bits, nr_output_bits, arg1=None, arg2=None):
         if nr_input_bits == 0:
             lg.warning(' shifter should have at least one bit input for data')
             raise Exception('not enough inputs for shifter')
@@ -244,10 +244,10 @@ def argument_parse():
                         help='when nog logfile is used stderr will be used')
     parser.add_argument('--show_functions', action='store_true',
                         help='show available functions and description')
-    parser.add_argument('--value', action='store', default=None,
-                        help='value to pass to function when initializing')
-    # todo: add additional argument
-    # todo: register additional function
+    parser.add_argument('--arg1', action='store', default=None,
+                        help='argument to pass to function when initializing')
+    parser.add_argument('--arg2', action='store', default=None,
+                        help='second argument to pass to function when initializing')
     arguments = parser.parse_args(sys.argv[1:])
     return arguments
 
@@ -312,7 +312,8 @@ class App:
 
         self.sim_dat.log_status(lg)
         lg.info('init loop function')
-        self.loop_function = self.d_function(self.sim_dat.input_bits, self.sim_dat.output_bits)
+        self.loop_function = self.d_function(self.sim_dat.input_bits,
+                                             self.sim_dat.output_bits, self.args.arg1, self.args.arg2)
 
     def run(self):
         lg.info('starting loop')

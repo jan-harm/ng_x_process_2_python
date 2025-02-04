@@ -45,7 +45,7 @@ ap1_4 [up_down enable] clk1 null [o1 o2 o3 o4] proc1
 .model proc1 d_process (process_file="pytest", process_params=["shifter","-v", "--log_file", "shifter.log]))
 
 ap4_1 [o1] clk1 null [delay_o2] proc2
-.model proc2 d_process (process_file="pytest" process_params=["delay", "-vvv", "--log_file", "delay.log"])
+.model proc2 d_process (process_file="pytest" process_params=["delay", "-vvv", "--log_file", "delay.log", "--arg1", "12"])
 
 ; ap4_1a [q1 q2 q3 q4] clk1 null [qzeros] proc3
 ; .model proc3 d_process (process_file="prog4in1out")
