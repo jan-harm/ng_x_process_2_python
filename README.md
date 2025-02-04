@@ -46,3 +46,5 @@ see named_pipe_test for details. named pipes make it easier to test, just set a 
 - tests done on  Ubuntu 24.04.1 LTS
 - ngspice must be installed for command line use (Kicad uses a dll)
 - ngspice version 44, a complete build was done to avoid conflicting with Kicad. (.cm file folder will conflict)
+- GTKWave only needed for displaying the data
+Note the ngttk.tcl file is only needed for the call to GTKWave

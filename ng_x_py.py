@@ -7,6 +7,7 @@ import numpy as np
 import bitarray as ba
 from bitarray.util import int2ba, zeros
 import logging
+import argparse
 
 # constants
 max_version = 1  # version of pipe interface
@@ -15,6 +16,9 @@ header_length = 3  # three uint8 version, input bit and output bits
 
 FIFO_IN = 'pytest_in'
 FIFO_OUT = 'pytest_out'
+args = None
+lg = logging.getLogger(__name__)
+lg.setLevel(logging.DEBUG)
 
 
 class PipeData:
@@ -170,12 +174,14 @@ class Counter:
 
         return value
 
+
 class Shifter:
     """Simple shift function
     with one input shift input in register
     with two inputs, first is data second is enable
     nr of outputs bits:
     n gives a register of nbits"""
+
     def __init__(self, nr_input_bits, nr_output_bits):
         if nr_input_bits == 0:
             lg.warning(' shifter should have at least one bit input for data')
@@ -200,6 +206,7 @@ class Shifter:
 function_table = {'counter': Counter,
                   'shifter': Shifter}
 
+
 def get_loop_function(name):
     if name in function_table:
         d_function = function_table[name]
@@ -212,4 +219,124 @@ def get_loop_function(name):
     return d_function
 
 
-lg = logging.getLogger(__name__)
+def register_function(name, function):
+    """to register any new function"""
+    if type(name) == dict:
+        for k, v in name.items():
+            register_function(k, v)
+    lg.debug('registering function with name :%s', name)
+    if name.lower() != name:
+        lg.warning('function name %s is mot lower case and will not found')
+    if name in function_table:
+        lg.warning('function with name %s already exists and will be overwritten')
+    function_table[name] = function
+
+
+def argument_parse():
+    parser = argparse.ArgumentParser(prog=sys.argv[0], exit_on_error=False)
+    parser.add_argument('--verbose', '-v', action='count', default=0,
+                        help='log level use  -vv for debug info')
+    parser.add_argument('--named_pipe', action='store_true',
+                        help='with named pipe logging will be done to stderr')
+    parser.add_argument('function', action='store',
+                        help='function to be used for processing, like counter')
+    parser.add_argument('--log_file', action='store', default='',
+                        help='when nog logfile is used stderr will be used')
+    parser.add_argument('--show_functions', action='store_true',
+                        help='show available functions and description')
+    parser.add_argument('--value', action='store', default=None,
+                        help='value to pass to function when initializing')
+    # todo: add additional argument
+    # todo: register additional function
+    arguments = parser.parse_args(sys.argv[1:])
+    return arguments
+
+
+class App:
+    """main that holds the loop"""
+
+    def __init__(self, main_logger):
+        self.sim_dat = None
+        self.loop_function = None
+        self.args = argument_parse()
+        if self.args.show_functions:
+            print('Available functions:')
+            for f, v in function_table.items():
+                print(f'function name: {f}')
+                print(f'description: {v.__doc__}')
+            exit(0)
+        self.use_stdin = not self.args.named_pipe
+
+        if self.args.log_file != '':
+            self.report_port = open(self.args.log_file, 'w')
+        else:
+            self.report_port = sys.stderr
+
+        self.set_up_log(main_logger)
+        if self.use_stdin:
+            lg.debug('opening stdin and stdout for data transfer')
+            self.pipe_in = os.fdopen(sys.stdin.fileno(), "rb", closefd=False)
+            self.pipe_out = os.fdopen(sys.stdout.fileno(), "wb", closefd=False)
+        else:
+            lg.debug('Opening FIFOs:  %s for input and  %s for output', FIFO_IN, FIFO_OUT)
+            self.pipe_in = open(FIFO_IN, 'rb', buffering=0)
+            self.pipe_out = open(FIFO_OUT, 'wb', buffering=0)
+
+        self.d_function = get_loop_function(self.args.function)
+        self.setup_loop()
+
+    def set_up_log(self, logger):
+        """Set uop logging for module and main"""
+
+        handler = logging.StreamHandler(self.report_port)
+        handler.setLevel(logging.DEBUG)
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        lg.addHandler(handler)
+        db_level = {0: logging.WARNING, 1: logging.INFO, 2: logging.DEBUG}
+        if self.args.verbose >= len(db_level):
+            log_level = logging.DEBUG
+        else:
+            log_level = db_level[self.args.verbose]
+        lg.setLevel(log_level)
+        logger.setLevel(log_level)
+
+        logger.info('start logging of %s', __name__)
+        logger.info('log level is %s', logging.getLevelName(logger.level))
+
+    def setup_loop(self):
+        # prepare loop
+        lg.info('reading header')
+        self.sim_dat = PipeData(self.pipe_in, self.pipe_out)
+
+        self.sim_dat.log_status(lg)
+        lg.info('init loop function')
+        self.loop_function = self.d_function(self.sim_dat.input_bits, self.sim_dat.output_bits)
+
+    def run(self):
+        lg.info('starting loop')
+        while True:
+            if not self.step():
+                break
+
+    def step(self):
+        if self.pipe_in.closed:
+            lg.debug('pipe in closed')
+            return False
+        if self.pipe_out.closed:
+            lg.debug('pipe out closed')
+            return False
+        # data = pipe_in.read(size_in)  # read a float
+        if not self.sim_dat.io_update_from_pipe():
+            lg.debug('could not read input (0 bytes) closing program..')
+            return False
+        lg.debug('simulation time: %5.3e', self.sim_dat.time)
+        result = self.loop_function.update(self.sim_dat.input_data)
+        lg.debug('input:  %s, output: %s', str(self.sim_dat.input_data), str(result))
+        res2 = self.sim_dat.io_send_result_to_pipe(result)
+        if res2 == 0:
+            lg.debug('could not write data (r is %d), port closed is %d ', res2, self.pipe_out.closed)
+            return False
+
+        return True
