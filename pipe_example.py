@@ -18,7 +18,12 @@ class Delay:
         if nr_input_bits == 0:
             logger.warning(' delay should have at least one bit input for data')
             raise Exception('not enough inputs for delay')
-        self.clocks_delay = int(arg1) if int(arg1) > 1 else 1
+        if arg1 is not None:
+            int_arg1 = round(float(arg1))
+        else:
+            logger.warning('delay argument not given, set to 1')
+            int_arg1 = 1
+        self.clocks_delay = int_arg1 if int_arg1 > 1 else 1
         self.enable = nr_input_bits > 1
         self.delay_register = zeros(self.clocks_delay)
         self.nr_output_bits = nr_output_bits
